@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # coding: latin-1
 
+import hashlib
 import sqlite3
 import os
 class mfclib:
@@ -42,7 +43,7 @@ class mfclib:
 		self._db_exec("create table fc_terms (term_id INTEGER PRIMARY KEY AUTOINCREMENT, term TEXT);")
 		self._db_exec("create table fc_tags (tag_id INTEGER PRIMARY KEY AUTOINCREMENT, tag TEXT);")
 		self._db_exec("create table fc_taggeds (tag_id INTEGER, term_id INTEGER)")
-		self._db_exec("create table fc_phrases (phrase_id INTEGER PRIMARY KEY AUTOINCREMENT);")
+		self._db_exec("create table fc_phrases (phrase_id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, md5 TEXT);")
 		self._db_exec("create table fc_rel (tag_id INTEGER, term_id1 INTEGER, term_id2 INTEGER);")
 		self._db_exec("create table fc_sym (tag_id1 INTEGER, term_id1 INTEGER, tag_id2 INTEGER, term_id2 INTEGER);")
 		self._db_exec("create table fc_links (tag_id INTEGER, term_id INTEGER, phrase_id INTEGER);")
@@ -51,6 +52,52 @@ class mfclib:
 		
 		return None
 
+	def link(self, tag_id, term_id, phrase_id):
+		if not self.is_int(phrase_id) or not self.is_int(tag_id) or not self.is_int(term_id):
+			return None
+
+
+                data = {'phrase_id':phrase_id, 'tag_id' : tag_id, 'term_id' : term_id}
+                self._db_exec("insert into fc_links (tag_id, term_id, phrase_id) values (:tag_id, :term_id, :phrase_id)", data)
+		return True
+
+	def get_linked_terms(self, phrase_id):
+		if not self.is_int(phrase_id):
+			return None
+		self._db_exec("select fc_links.term_id, fc_terms.term from fc_links, fc_terms where fc_links.term_id = fc_terms.term_id and fc_links.phrase_id = :phrase_id", {'phrase_id':phrase_id})
+                return self._db_one()
+
+	def get_phrase_by_id(self, phrase_id ):
+		self._db_exec("select phrase from fc_phrases where phrase_id = :phrase_id", {'phrase_id':phrase_id})
+                return self._db_one()
+
+
+	def get_phrase_id(self, phrase):
+		m = hashlib.md5()
+                m.update(text.upper())
+                md5 = m.hexdigest()
+
+		self._db_exec("select phrase_id from fc_phrases where md5 = :md5", {'md5':md5})
+                return self._db_one()
+
+	def get_phrase_id_by_md5(self, md5):
+		self._db_exec("select phrase_id from fc_phrases where md5 = :md5", {'md5':md5})
+                return self._db_one()
+
+
+	def add_phrase(self, text):
+		m = hashlib.md5()
+		m.update(text.upper())
+		md5 = m.hexdigest()
+
+		phrase_id = self.get_phrase_id_by_md5(md5)
+		
+		if phrase_id == None:
+			data = {'phrase_id':phrase_id, 'text' : text, 'md5' : md5}
+			self._db_exec("insert into fc_phrases (phrase_id, text, md5) values (:phrase_id, :text, :md5)", data)
+			phrase_id = self.get_phrase_id_by_md5(md5)
+
+		return phrase_id
 
 	def add_tag(self, name):
 		data = {'tag' : name}
@@ -59,7 +106,7 @@ class mfclib:
 		if self._db_one() == None:
 			self._db_exec("insert into fc_tags (tag) values (:tag)", data)
 			self._db_exec("select tag_id from fc_tags where tag = :tag", data)
-			return self._db_one()[0]
+			return {'tag_id' : self._db_one()[0]}
 		
 		return None
 
@@ -72,8 +119,12 @@ class mfclib:
 
 	def get_tags(self):
 		self._db_exec("select * from fc_tags")
+		obj = {'tags':[]}
 		cache = self._db_fetch_all()
-		return cache
+		for tag in cache:
+			obj['tags'].append({'tag_id':tag[0], 'tag':tag[1]})
+
+		return obj
 
 	def get_tag_id(self, tag):
 		
@@ -148,21 +199,33 @@ class mfclib:
 
 	
 	def get_karma(self, term_id):
-		self._db_exec('select karma from fc_status where term_id = :term_id', {'term_id':term_id})
+		self._db_exec('select karma, corrects, errors from fc_status where term_id = :term_id', {'term_id':term_id})
 		res = self._db_one()
 		if res == None:
-			return 0.1
-		return res[0]
+			return None
+		return res
 
 
 	def karma(self, term_id, ok):
-		karma = self.get_karma(term_id)
+
+		status = self.get_karma(term_id)
+		
+		if status == None:
+			return None
+		
+		karma = status[0]
+
 		if ok == True:
-			karma = karma + (karma * 2.2)
-			self._db_exec('update fc_status set corrects = corrects + 1 and karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})	
+			karma = karma + ((karma * 2.2) + ((status[1] - status[2]) * 0.2))
+			if karma >= 1.0e14:
+				karma = 1.0e14
+			self._db_exec('update fc_status set corrects = corrects + 1, karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})	
 		else:
-			karma = karma + (karma * 0.05)
-			self._db_exec('update fc_status set corrects = corrects + 1 and karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})
+			
+			karma = karma + ((karma * 0.05) + (status[1]-status[2] * 0.05))
+			if karma < 0.1:
+				karma = 0.1
+			self._db_exec('update fc_status set errors = errors + 1, karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})
 		return karma		
 
 
@@ -172,7 +235,11 @@ class mfclib:
 			return None
 
 		self._db_exec("select term.term_id, term.term from fc_taggeds tagged, fc_terms term where tagged.tag_id = :tag_id", {'tag_id' : tag_id})
-		return self._db_fetch_all()	
+		res = self._db_fetch_all()	
+		obj = {'terms': []}
+		for i in res:
+			obj['terms'].append({'term_id':i[0], 'term' : i[1]})
+		return obj
 
 	def get_terms_by_tag(self, tag):
 
@@ -189,7 +256,21 @@ class mfclib:
 		
 		return self._db_fetch_all()
 
-	
+
+	def get_level(self, karma):
+		if karma < 151.1:
+			return 1	
+		elif karma < 50915:
+			return 2
+		elif karma < 17084817:
+			return 3
+		elif karma < 58702992580:
+			return 4
+		elif karma < 6.30318583297e13:
+			return 5
+		elif karma == 1e14:
+			return 6
+
 	def close(self):
 		#self._db_exec('commit')
 		self._db.commit()
@@ -217,17 +298,17 @@ if __name__ == '__main__':
 	tags = test.get_tags()
 
 	#add_tag
-	assert str(tags) == "[(1, u'English')]", 'Add tag test FAILED!'
+	assert len(tags['tags']) == 1 and tags['tags'][0]['tag_id'] == 1 and tags['tags'][0]['tag'] == 'English', 'Add tag test FAILED!'
 
 	test.add_tag('English')
 	tags = test.get_tags()
 
-	assert str(tags) == "[(1, u'English')]", 'Add duplicated tag FAILED!'
+	assert len(tags['tags']) == 1, 'Add duplicated tag FAILED!'
 
 	test.add_tag('French')
 	tags = test.get_tags()
 	
-	assert str(tags) == "[(1, u'English'), (2, u'French')]", 'Add second tag test FAILED!'
+	assert len(tags['tags']) == 2, 'Add second tag test FAILED!'
 
 	#get_tag_id
 	assert 1 == test.get_tag_id('English'), 'Add get tag_id FAILED!'
@@ -262,7 +343,7 @@ if __name__ == '__main__':
 	#tag / get_term_id /get_tag_id / get_terms_by_tag_id
 	assert test.tag(test.get_term_id('World'),test.get_tag_id('English')), 'Tag fail'
 	assert not test.tag(test.get_term_id('Monde'),test.get_tag_id('French')), 'Tag fail'
-	assert test.get_terms_by_tag_id(1)[0][0] == 1, 'Get terms by tag id Fail'
+	assert test.get_terms_by_tag_id(1)['terms'][0]['term_id'] == 1, 'Get terms by tag id Fail'
 	assert test.get_terms_by_tag('English')[0][0] == 1, 'Get terms by tag FAIL'
 
 	#get_tags_by_term_id	
@@ -270,13 +351,26 @@ if __name__ == '__main__':
 	ids = test.get_tags_by_term_id(1)
 	assert ids[0][0] == 1 and ids[1][0] == 3, 'Get tags by term_id FAIL'
 	
-	#get karma
-	print test.get_karma(1)
-	print test.karma(1, True)
-	print test.karma(2, False)
-	#assert 1 and ids[1][0] == 3, 'Get tags by term_id FAIL'
+	laws = test.add_term('Laws')
+	
+	#get karma / get level
+	
+	assert round(test.get_karma(1)[0],1) == 0.1, 'Karma Fail'
+	assert round(test.karma(1, True),2) == 0.32, 'Level Fail'
+	assert test.get_level(test.karma(1, True)) == 1, 'Level Fail'
+
+	
+	#add phrase / get phrase 
+	text = 'Hello World of Laws!'
+	assert test.add_phrase(text)[0] == 1, 'Add phrase fail'
+	assert test.get_phrase_id(text)[0] == 1, 'Get Phrase Id Fail'
+
+
+	#link / get linked terms
+	test.link(2,1,1)
+	print test.get_linked_terms(1)	
+	
 
 	test.close()	
 	
 	print 'Congrats! Test passed!'
-	
