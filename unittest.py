@@ -3,6 +3,7 @@
 
 import sys, os
 from mfclib import mfclib
+
 sys.path.append('./')
 
 
@@ -62,11 +63,15 @@ assert id1 == id2, 'Add Term/Get Term Id FAILED!'
 assert test.tag(test.get_term_id('World'),test.get_tag_id('English')), 'Tag fail'
 assert not test.tag(test.get_term_id('Monde'),test.get_tag_id('French')), 'Tag fail'
 assert test.get_terms_by_tag_id(1)['terms'][0]['term_id'] == 1, 'Get terms by tag id Fail'
-assert test.get_terms_by_tag('English')[0][0] == 1, 'Get terms by tag FAIL'
+assert len(test.get_terms_by_tag('English')['terms']) == 1, 'Get terms by tag FAIL'
 
 #get_tags_by_term_id
 test.tag(1,3)
 ids = test.get_tags_by_term_id(1)
+
+print ids
+
+
 assert ids[0][0] == 1 and ids[1][0] == 3, 'Get tags by term_id FAIL'
 
 laws = test.add_term('Laws')
