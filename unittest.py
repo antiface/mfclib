@@ -69,18 +69,16 @@ assert len(test.get_terms_by_tag('English')['terms']) == 1, 'Get terms by tag FA
 test.tag(1,3)
 ids = test.get_tags_by_term_id(1)
 
-print ids
-
-
-assert ids[0][0] == 1 and ids[1][0] == 3, 'Get tags by term_id FAIL'
+assert len(ids['tags']) == 2, 'Get tags by term_id FAIL'
 
 laws = test.add_term('Laws')
 
 #get karma / get level
 
-assert round(test.get_karma(1)[0],1) == 0.1, 'Karma Fail'
-assert round(test.karma(1, True),2) == 0.32, 'Level Fail'
-assert test.get_level(test.karma(1, True)) == 1, 'Level Fail'
+
+assert round(test.get_karma(1)['karma']) == 0.1, 'Karma Fail'
+assert round(test.karma(1, True)['karma'],2) == 0.32, 'Level Fail'
+assert test.get_karma(1)['level'] == 1, 'Level Fail'
 
 
 #add phrase / get phrase

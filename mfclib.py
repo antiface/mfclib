@@ -204,7 +204,7 @@ class mfclib:
     	res = self._db_one()
     	if res == None:
     		return None
-    	return res
+    	return {'karma':res[0], 'corrects' : res[1], 'errors' : res[2], 'level':self._get_level(res[0])}
     
     
     def karma(self, term_id, ok):
@@ -223,11 +223,11 @@ class mfclib:
     		self._db_exec('update fc_status set corrects = corrects + 1, karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})
     	else:
     
-    		karma = karma + ((karma * 0.05) + (status[1]-status[2] * 0.05))
+    		karma = karma + ((karma * 2.2) + (status[1]-status[2] * 0.3))
     		if karma < 0.1:
     			karma = 0.1
     		self._db_exec('update fc_status set errors = errors + 1, karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})
-    	return karma
+    	return {'karma' : karma}
     
     
     def get_terms_by_tag_id(self, tag_id):
@@ -268,7 +268,7 @@ class mfclib:
         	obj['tags'].append({'tag_id':i[0], 'tag' : i[1]})
     	return obj
     
-    def get_level(self, karma):
+    def _get_level(self, karma):
     	if karma < 151.1:
     		return 1
     	elif karma < 50915:
