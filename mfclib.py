@@ -46,27 +46,46 @@ class mfclib:
     	self._db_exec("create table fc_taggeds (tag_id INTEGER, term_id INTEGER)")
     	self._db_exec("create table fc_phrases (phrase_id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, md5 TEXT);")
     	self._db_exec("create table fc_rel (tag_id INTEGER, term_id1 INTEGER, term_id2 INTEGER);")
-    	self._db_exec("create table fc_sym (tag_id1 INTEGER, term_id1 INTEGER, tag_id2 INTEGER, term_id2 INTEGER);")
     	self._db_exec("create table fc_links (tag_id INTEGER, term_id INTEGER, phrase_id INTEGER);")
     	self._db_exec("create table fc_review (term_id INTEGER, date INTEGER);")
     	self._db_exec("create table fc_status (term_id INTEGER, corrects INTEGER, errors INTEGER, karma REAL);")
     
     	return None
-    
+   
+
+
+
+ 
     def link(self, tag_id, term_id, phrase_id):
     	if not self.is_int(phrase_id) or not self.is_int(tag_id) or not self.is_int(term_id):
     		return None
     
-    
-                data = {'phrase_id':phrase_id, 'tag_id' : tag_id, 'term_id' : term_id}
-                self._db_exec("insert into fc_links (tag_id, term_id, phrase_id) values (:tag_id, :term_id, :phrase_id)", data)
+        data = {'phrase_id':phrase_id, 'tag_id' : tag_id, 'term_id' : term_id}
+        self._db_exec("insert into fc_links (tag_id, term_id, phrase_id) values (:tag_id, :term_id, :phrase_id)", data)
     	return True
     
     def get_linked_terms(self, phrase_id):
     	if not self.is_int(phrase_id):
     		return None
+
     	self._db_exec("select fc_links.term_id, fc_terms.term from fc_links, fc_terms where fc_links.term_id = fc_terms.term_id and fc_links.phrase_id = :phrase_id", {'phrase_id':phrase_id})
-        return self._db_one()
+        res = self._db_fetch_all()
+	obj = {'links':[]}
+	for i in res:
+		obj['linked'].append({'term_id':i[0], 'term':i[1]})
+	return obj
+
+    def get_linked_phrases(self, term_id):
+	if not self.is_int(term_id):
+                return None
+
+        self._db_exec("select fc_links.phrase_id, fc_phrases.text from fc_links, fc_phrases where fc_links.phrase_id = fc_phrases.phrase_id and fc_links.term_id = :term_id", {'term_id':term_id})
+        res = self._db_fetch_all()
+        obj = {'links':[]}
+        for i in res:
+                obj['linked'].append({'phrase_id':i[0], 'phrase':i[1]})
+        return obj
+
     
     def get_phrase_by_id(self, phrase_id ):
     	self._db_exec("select phrase from fc_phrases where phrase_id = :phrase_id", {'phrase_id':phrase_id})
@@ -214,16 +233,16 @@ class mfclib:
     	if status == None:
     		return None
     
-    	karma = status[0]
+    	karma = status['karma']
     
     	if ok == True:
-    		karma = karma + ((karma * 2.2) + ((status[1] - status[2]) * 0.2))
+    		karma = karma + ((karma * 2.2) + ((status['corrects'] - status['errors']) * 0.2))
     		if karma >= 1.0e14:
     			karma = 1.0e14
     		self._db_exec('update fc_status set corrects = corrects + 1, karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})
     	else:
     
-    		karma = karma + ((karma * 2.2) + (status[1]-status[2] * 0.3))
+    		karma = karma + ((karma * 2.2) + (status['corrects'] - status['errors'] * 0.3))
     		if karma < 0.1:
     			karma = 0.1
     		self._db_exec('update fc_status set errors = errors + 1, karma = :karma where term_id = :term_id',{'karma':karma, 'term_id':term_id})

@@ -75,8 +75,7 @@ laws = test.add_term('Laws')
 
 #get karma / get level
 
-
-assert round(test.get_karma(1)['karma']) == 0.1, 'Karma Fail'
+assert round(test.get_karma(1)['karma'],2) == 0.1, 'Karma Fail'
 assert round(test.karma(1, True)['karma'],2) == 0.32, 'Level Fail'
 assert test.get_karma(1)['level'] == 1, 'Level Fail'
 
