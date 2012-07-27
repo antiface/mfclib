@@ -90,6 +90,10 @@ assert test.get_phrase_id(text)[0] == 1, 'Get Phrase Id Fail'
 test.link(2,1,1)
 print test.get_linked_terms(1)
 
+print test.rel(1,1,2)
+print test.get_rel(1,1)
+
+
 test.close()
 
 print 'Congrats! Test passed!'

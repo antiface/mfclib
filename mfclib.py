@@ -53,7 +53,27 @@ class mfclib:
     	return None
    
 
+    def rel(self, tag_id, term_id1, term_id2):
+        if not self.is_int(term_id1) or not self.is_int(tag_id) or not self.is_int(term_id2):
+                return None
 
+        data = {'term_id2':term_id2, 'tag_id' : tag_id, 'term_id1' : term_id1}
+        self._db_exec("insert into fc_rel (tag_id, term_id1, term_id2) values (:tag_id, :term_id1, :term_id2)", data)
+        return True
+
+
+    def get_rel(self, term_id1, tag_id=None):
+	data = {'term_id1' : term_id1, 'tag_id' : tag_id }
+	if tag_id == None:
+		self._db_exec("select fc_rel.tag_id, fc_rel.term_id2 from fc_rel where fc_rel.term_id1 = :term_id1", data)
+	else:
+		self._db_exec("select fc_rel.tag_id, fc_rel.term_id2 from fc_rel where fc_rel.term_id1 = :term_id1 and fc_rel.tag_id = :tag_id", data)
+
+        res = self._db_fetch_all()
+	obj = {'rel':[]}
+	for i in res:
+		obj['rel'].append({'tag_id':i[0], 'term_id':i[1]})
+	return obj
 
  
     def link(self, tag_id, term_id, phrase_id):
@@ -72,7 +92,7 @@ class mfclib:
         res = self._db_fetch_all()
 	obj = {'links':[]}
 	for i in res:
-		obj['linked'].append({'term_id':i[0], 'term':i[1]})
+		obj['links'].append({'term_id':i[0], 'term':i[1]})
 	return obj
 
     def get_linked_phrases(self, term_id):
